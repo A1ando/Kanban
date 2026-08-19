@@ -1,0 +1,25 @@
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 数据目录（用于挂载卷）
+data/
+
+# JSON 数据备份（如果有）
+projects_data.json
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 环境变量文件
+.env
+
+# IDE 配置
+.vscode/
+.idea/
+
+# 日志文件
+*.log
