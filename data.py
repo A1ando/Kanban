@@ -156,27 +156,47 @@ def calculate_auto_progress(start_str, end_str, actual_end_str, today_str):
 
 # ---------- 内部重算 ----------
 def _recalc_main_project(main_id, cur):
-    cur.execute('''
-        SELECT start_date, end_date, man_days FROM sub_tasks WHERE main_id = ?
-    ''', (main_id,))
+    # 获取所有子任务
+    cur.execute('SELECT start_date, end_date, man_days FROM sub_tasks WHERE main_id = ?', (main_id,))
     rows = cur.fetchall()
-    all_starts = [r['start_date'] for r in rows if r['start_date'] and validate_date(r['start_date'])]
-    all_ends = [r['end_date'] for r in rows if r['end_date'] and validate_date(r['end_date'])]
-
-    cur.execute("SELECT date FROM events WHERE main_id = ?", (main_id,))
-    event_dates = [r['date'] for r in cur.fetchall() if r['date'] and validate_date(r['date'])]
-    all_starts.extend(event_dates)
-    all_ends.extend(event_dates)
-
-    start_date = min(all_starts) if all_starts else None
-    end_date = max(all_ends) if all_ends else None
     total_man_days = sum(r['man_days'] for r in rows if r['man_days'] and isinstance(r['man_days'], (int, float)))
-
-    calendar_days = 0
-    work_days = 0
-    if start_date and end_date:
-        calendar_days, work_days = calculate_days(start_date, end_date)
-
+    
+    # 获取所有事件的日期
+    cur.execute("SELECT date FROM events WHERE main_id = ?", (main_id,))
+    event_rows = cur.fetchall()
+    
+    # 收集所有日期（去重）
+    date_set = set()
+    for r in rows:
+        start = r['start_date']
+        end = r['end_date']
+        if start and end and validate_date(start) and validate_date(end):
+            try:
+                d_start = datetime.strptime(start, "%Y-%m-%d").date()
+                d_end = datetime.strptime(end, "%Y-%m-%d").date()
+                if d_start <= d_end:
+                    curr = d_start
+                    while curr <= d_end:
+                        date_set.add(curr)
+                        curr += timedelta(days=1)
+            except ValueError:
+                pass
+    for evt in event_rows:
+        date_str = evt['date']
+        if date_str and validate_date(date_str):
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d").date()
+                date_set.add(d)
+            except ValueError:
+                pass
+    
+    calendar_days = len(date_set)  # 去重后的自然日总数
+    work_days = sum(1 for d in date_set if d.weekday() < 5)  # 其中工作日
+    
+    # 主项目的开始/结束日期（用于前端显示）
+    start_date = min(date_set).isoformat() if date_set else None
+    end_date = max(date_set).isoformat() if date_set else None
+    
     cur.execute('''
         UPDATE main_projects 
         SET start_date = ?, end_date = ?, man_days = ?, calendar_days = ?, work_days = ?
