@@ -6,8 +6,8 @@
     <title>项目看板</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <style>
         body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 0.88rem; user-select: none; }
@@ -116,7 +116,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
             <h4 class="fw-bold mb-1"><i class="bi bi-kanban text-primary me-2"></i>项目看板</h4>
-            <p class="text-muted mb-0">项目总览 折叠 节点</p>
+            <p class="text-muted mb-0">项目总览</p>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <button class="btn btn-outline-secondary btn-sm" id="toggleLeftBtn">
@@ -869,14 +869,29 @@ function initEasyMDE(text) {
         autofocus: false,
         spellChecker: false,
         minHeight: '200px',
+        preview: true,          // 关键：开启预览模式
+        sideBySide: false,      // 纯预览（不并排）
         toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'image', '|', 'preview', 'guide']
     });
     easyMDEInstance.value(text || '');
+
+    // 延迟执行，确保 DOM 完全渲染
     setTimeout(() => {
+        // 刷新 CodeMirror 实例，修正尺寸
         easyMDEInstance.codemirror.refresh();
+
+        // 强制进入预览模式（保证一定是预览）
+        // 注意：togglePreview 是切换，如果已经是预览会切回编辑，所以先判断状态
+        // 但 EasyMDE 没有直接暴露状态，我们可以通过检查 class 来判断
+        const container = document.querySelector('.EasyMDEContainer');
+        if (container && !container.classList.contains('editor-preview-active')) {
+            easyMDEInstance.togglePreview();
+        }
+
+        // 设置容器高度，避免被挤压
         const wrapper = document.querySelector('.editor-wrapper .EasyMDEContainer');
         if (wrapper) wrapper.style.height = '100%';
-    }, 100);
+    }, 150); // 适当加长延迟，确保模态框动画完成
 }
 
 // ==================== 编辑模态框 ====================
@@ -905,8 +920,16 @@ function openEditModal(node, category) {
         document.getElementById('editEventDate').value = node.date || '';
     }
 
-    initEasyMDE(node.description || '');
     editModalInstance.show();
+    // 在模态框完全显示后初始化编辑器
+    const modalElement = document.getElementById('editModal');
+    modalElement.addEventListener('shown.bs.modal', function onShown() {
+        modalElement.removeEventListener('shown.bs.modal', onShown); // 避免重复绑定
+        // 额外延迟 50ms，确保尺寸稳定
+        setTimeout(() => {
+            initEasyMDE(node.description || '');
+        }, 50);
+}, { once: true });
 }
 
 // ==================== 保存编辑 ====================
