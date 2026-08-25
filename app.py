@@ -19,13 +19,8 @@ def index():
 def get_projects():
     try:
         today = datetime.today().strftime('%Y-%m-%d')
-        projects = data.get_all_projects(today)
-        return jsonify({
-            "projects": projects,
-            "timeline_start": "2026-06-01",
-            "timeline_end": "2026-12-31",
-            "today": today
-        })
+        result = data.get_all_projects(today)
+        return jsonify(result)
     except Exception as e:
         logger.error(f"获取项目失败: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
