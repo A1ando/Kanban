@@ -309,6 +309,7 @@ def get_all_projects(today="2026-08-12"):
         cur.execute("SELECT * FROM main_projects ORDER BY sort_order")
         main_rows = cur.fetchall()
         projects = []
+        all_dates = []
         for main in main_rows:
             main_dict = dict(main)
             cur.execute("SELECT * FROM sub_tasks WHERE main_id = ? ORDER BY sort_order", (main['id'],))
@@ -327,11 +328,18 @@ def get_all_projects(today="2026-08-12"):
                 child.setdefault('description', '')
                 child.setdefault('owner', '')
                 child.setdefault('man_days', 0)
+                # 收集日期
+                if child.get('start_date'):
+                    all_dates.append(child['start_date'])
+                if child.get('end_date'):
+                    all_dates.append(child['end_date'])
             main_dict['children'] = children
 
             cur.execute("SELECT * FROM events WHERE main_id = ?", (main['id'],))
             events = [dict(row) for row in cur.fetchall()]
             for evt in events:
+                if evt.get('date'):
+                    all_dates.append(evt['date'])
                 evt['date'] = evt.get('date')
                 evt.setdefault('description', '')
                 evt.setdefault('owner', '')
@@ -346,7 +354,25 @@ def get_all_projects(today="2026-08-12"):
             main_dict['description'] = main_dict.get('description', '')
 
             projects.append(main_dict)
-        return projects
+        if all_dates:
+            min_date = min(all_dates)
+            max_date = max(all_dates)
+            min_dt = datetime.strptime(min_date, '%Y-%m-%d').date() - timedelta(days=7)
+            max_dt = datetime.strptime(max_date, '%Y-%m-%d').date() + timedelta(days=7)
+            timeline_start = min_dt.isoformat()
+            timeline_end = max_dt.isoformat()
+        else:
+            # 若无任何日期，使用默认范围（今日前后）
+            today_dt = datetime.strptime(today, '%Y-%m-%d').date()
+            timeline_start = (today_dt - timedelta(days=30)).isoformat()
+            timeline_end = (today_dt + timedelta(days=90)).isoformat()
+
+        return {
+            "projects": projects,
+            "timeline_start": timeline_start,
+            "timeline_end": timeline_end,
+            "today": today
+        }
 
 def add_node(main_id, node_data):
     node_type = node_data.get('type', 'sub')
@@ -431,8 +457,11 @@ def update_node(node_id, updates):
             fields = []
             values = []
             # 可更新字段
+            # ← Bug#2 修复：actual_end 允许 None 值通过（用于清空实际完成日期）
             for key in ['name', 'owner', 'description', 'start', 'end', 'actual_end', 'man_days']:
-                if updates.get(key) is not None:
+                val = updates.get(key)
+                # actual_end 允许为 None（用于清空实际完成日期），其他字段仅非 None 时更新
+                if val is not None or key == 'actual_end':
                     # 数据库列名映射
                     col_map = {
                         'start': 'start_date',
@@ -447,7 +476,6 @@ def update_node(node_id, updates):
                     if db_col:
                         fields.append(f"{db_col} = ?")
                         # 处理类型
-                        val = updates[key]
                         if key == 'man_days' and val is not None:
                             try:
                                 val = float(val)
@@ -461,7 +489,7 @@ def update_node(node_id, updates):
                 _recalc_main_project(main_id, cur)
             return True
 
-        # 事件
+        # 事件（以下不变）
         cur.execute("SELECT main_id FROM events WHERE id = ?", (node_id,))
         row = cur.fetchone()
         if row:
@@ -486,6 +514,7 @@ def update_node(node_id, updates):
             return True
 
         return False
+
 
 def delete_node(node_id):
     with db_cursor() as cur:
