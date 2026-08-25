@@ -15,10 +15,10 @@
 
 <div class="container-fluid py-3 px-4">
     <!-- 顶栏 -->
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 top-bar-row">
         <div>
             <h4 class="fw-bold mb-1"><i class="bi bi-kanban text-primary me-2"></i>项目看板</h4>
-            <p class="text-muted mb-0">项目总览</p>
+            <!-- <p class="text-muted mb-0">项目总览</p> -->
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <button class="btn btn-outline-secondary btn-sm" id="toggleLeftBtn">
@@ -40,20 +40,24 @@
             <button class="btn btn-info btn-sm" id="exportExcelBtn">
                 <i class="bi bi-file-earmark-excel"></i> 导出 Excel
             </button>
+            <button class="btn btn-outline-secondary btn-sm" id="toggleTopBar" title="隐藏图例">
+                <i class="bi bi-chevron-up"></i>
+            </button>
         </div>
     </div>
 
     <!-- 图例 -->
-    <div class="d-flex align-items-center gap-3 mb-3 p-2 bg-white rounded border flex-wrap">
+    <div class="d-flex align-items-center gap-3 mb-3 p-2 bg-white rounded border flex-wrap legend-row">
         <span class="fw-bold"><i class="bi bi-info-circle me-1"></i>图例:</span>
-        <span class="badge bg-dark">主项目</span>
+        <span class="badge" style="background:#120101; color:#fff;">主项目</span>
         <span class="badge" style="background:linear-gradient(90deg,#3b82f6,#2563eb);">进行中</span>
-        <span class="badge" style="background:linear-gradient(90deg,#22c55e,#16a34a);">提前完成</span>
+        <span class="badge" style="background:#6c757d; color:#fff;">未开始</span>
+        <span class="badge" style="background:linear-gradient(90deg,#22c55e,#16a34a);">已完成</span>
         <span class="badge" style="background:#dc3545;">延迟</span>
-        <span class="badge" style="background:#dcfce7; border:2px solid #22c55e; color:#2563eb;">提前→计划段</span>
+        <span class="badge" style="background:#dcfce7; border:2px solid #22c55e; color:#2563eb;">提前</span>
         <span class="badge bg-warning text-dark"><i class="bi bi-telephone-fill"></i> 沟通会</span>
         <span class="badge" style="background:#a855f7; color:#fff;"><i class="bi bi-flag-fill"></i> 里程碑</span>
-        <span class="text-muted ms-auto small"><i class="bi bi-hand-index-thumb me-1"></i>拖拽右侧滑动</span>
+        <span class="text-muted ms-auto small"><i class="bi bi-hand-index-thumb me-1"></i>拖拽时间轴滚动 · 滚轮纵向浏览</span>
     </div>
 
     <!-- 甘特图 -->
@@ -79,7 +83,7 @@
             <div class="today-line" id="todayLine"></div>
             <div class="marker-line" id="markerLine" style="display:none;"><span class="marker-tag" id="markerTag"></span></div>
         </div>
-    </div>
+    </div> 
 </div>
 
 <!-- 卡片 tooltip -->
