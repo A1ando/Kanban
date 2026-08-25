@@ -1,6 +1,37 @@
 body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 0.88rem; user-select: none; }
-.gantt-board-container { display: flex; background: #fff; border-radius: 8px; border: 1px solid #cbd5e1; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03); position: relative; }
-.gantt-left-panel { width: 570px; min-width: 570px; border-right: 2px solid #cbd5e1; z-index: 10; background: #fff; transition: all 0.3s ease; overflow: hidden; }
+
+/* 修改后（只隐藏图例） */
+.top-bar-hidden .legend-row {
+    display: none !important;
+}
+
+/* 可选：调整甘特图容器上边距，使布局更紧凑 */
+.top-bar-hidden .gantt-board-container {
+    margin-top: 0 !important;
+}
+
+.gantt-board-container { 
+    display: flex; 
+    align-items: flex-start; 
+    background: #fff; 
+    border-radius: 8px; 
+    border: 1px solid #cbd5e1; 
+    overflow: auto;                 /* 单一滚动容器：横向 + 纵向都在这里，页面本身不再滚动 */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03); 
+    position: relative; 
+    max-height: calc(100vh - 190px); /* 兜底值，JS 的 fitBoardHeight() 会精确设置 */
+}
+.gantt-left-panel { 
+    width: 580px; 
+    min-width: 570px; 
+    border-right: 2px solid #cbd5e1; 
+    z-index: 30;                    /* 冻结列：横向滚动时盖住下层时间轴内容 */
+    background: #fff; 
+    transition: all 0.3s ease; 
+    position: sticky;               /* 吸附左侧：横向滚动时任务列表保持可见 */
+    left: 0; 
+    overflow: visible;              /* 兼容兜底 */
+}
 .gantt-left-panel.collapsed { width: 270px; min-width: 270px; }
 .gantt-left-panel.collapsed .col-owner, .gantt-left-panel.collapsed .col-man-days,
 .gantt-left-panel.collapsed .col-natural, .gantt-left-panel.collapsed .col-work,
@@ -14,13 +45,38 @@ body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont
 .col-natural { width: 70px; flex-shrink: 0; }
 .col-work { width: 70px; flex-shrink: 0; }
 
-.gantt-right-panel { flex-grow: 1; position: relative; overflow-x: auto; cursor: grab; scroll-behavior: smooth; }
+.gantt-right-panel { 
+    flex-grow: 1; 
+    min-width: max-content;   /* 时间轴完整展开，超出部分由外层 #ganttBoard 横向滚动 */
+    position: relative; 
+    overflow: visible;        /* 不再是独立滚动容器 */
+    cursor: grab; 
+}
 .gantt-right-panel:active { cursor: grabbing; }
 
-.panel-header { height: 46px; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; font-weight: bold; display: flex; align-items: center; padding: 0 12px; gap: 4px; }
+.panel-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;            /* 左面板内部最高，盖住下方滚过的行 */
+    background: #f1f5f9;
+    height: 46px;
+    border-bottom: 1px solid #cbd5e1;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 4px;
+ }
 .panel-header .col-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.collapse-all-icon { cursor: pointer; font-size: 1.1rem; padding: 0 4px; color: #495057; }
+.collapse-all-icon { 
+    width: 22px;
+    flex-shrink: 0;
+    text-align: right;
+    cursor: pointer; 
+    font-size: 1.1rem; 
+    /* padding: 0 4px;  */
+    color: #495057; }
 .collapse-all-icon:hover { color: #2563eb; }
 
 .task-row { height: 42px; display: flex; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 0 12px; cursor: pointer; gap: 4px; }
@@ -29,7 +85,15 @@ body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont
 .task-row .col-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-row.sub-row { background-color: #ffffff; border-bottom: 1px solid #f1f5f9; }
 
-.timeline-header { height: 46px; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; display: flex; position: sticky; top: 0; z-index: 6; }
+.timeline-header {
+    position: sticky;
+    top: 0;                /* 纵向滚动时日期轴吸顶 */
+    z-index: 20;           /* 高于行内容与标记线(10)/今日线(7)，低于左面板(30) */
+    height: 46px;
+    background: #f1f5f9; 
+    border-bottom: 1px solid #cbd5e1; 
+    display: flex; 
+}
 .time-cell { border-right: 1px solid #e2e8f0; text-align: center; font-size: 0.75rem; display: flex; flex-direction: column; justify-content: center; color: #64748b; flex-shrink: 0; }
 .time-cell.today-cell { background-color: #fef2f2; color: #ef4444; font-weight: bold; }
 
@@ -42,8 +106,11 @@ body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont
 .bar-segment.blue { background: linear-gradient(90deg, #3b82f6, #2563eb); }
 .bar-segment.green { background: linear-gradient(90deg, #22c55e, #16a34a); }
 .bar-segment.red { background: #dc3545; }
+.bar-segment.gray {
+    background: #6c757d;  /* Bootstrap 的 secondary 灰色 */
+}
 .bar-segment.dashed { background: #dcfce7; border: 2px solid #22c55e; border-top: none; border-bottom: none; color: #2563eb; }
-.bar-main { position: absolute; height: 22px; top: 10px; background: #334155; opacity: 0.9; border-radius: 4px; cursor: pointer; z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+.bar-main { position: absolute; height: 22px; top: 10px; background: #120101; opacity: 0.9; border-radius: 4px; cursor: pointer; z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
 .bar-main:hover { transform: scaleY(1.15); }
 
 .node-marker { position: absolute; top: 8px; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 5; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.25); transition: all 0.2s; }
@@ -56,7 +123,11 @@ body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont
 .hover-line-tag { position: absolute; top: 2px; left: 4px; background: #2563eb; color: #fff; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
 .today-line { position: absolute; top: 0; bottom: 0; width: 2px; background-color: #ef4444; z-index: 7; pointer-events: none; }
 
-.collapse-icon { cursor: pointer; width: 22px; text-align: center; flex-shrink: 0; }
+.collapse-icon { 
+    cursor: pointer; 
+    width: 22px; 
+    text-align: center; 
+    flex-shrink: 0; }
 .collapse-icon:hover { color: #2563eb; }
 
 .marker-line {
@@ -65,7 +136,7 @@ body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont
     bottom: 0;
     width: 2px;
     border-left: 2px dashed #f59e0b;  /* 橙色虚线，区别于今日线红色 */
-    z-index: 6;
+    z-index: 10;
     pointer-events: none;
     display: none;
 }
