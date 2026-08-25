@@ -123,19 +123,22 @@ function renderGantt() {
     // 今日线
     const todayX = getXPixelByDate(today);
     document.getElementById('todayLine').style.left = `${todayX}px`;
+    document.getElementById('todayLine').title = '今天: ' + globalData.today;
 
     // 更新展开/折叠全部按钮的状态
     updateCollapseAllIcon();
+
+    // 重新定位标记线（使用全局变量）
     if (markerDate && markerLine) {
-    const x = getXPixelByDate(markerDate);
-    if (x !== undefined && x >= 0 && isFinite(x)) {
-        markerLine.style.left = x + 'px';
-        markerLine.style.display = 'block';
-        markerTag.textContent = markerDate;
-    } else {
-        markerLine.style.display = 'none';
-        markerDate = null;
-    }
+        const x = getXPixelByDate(markerDate);
+        if (x !== undefined && x >= 0 && isFinite(x)) {
+            markerLine.style.left = x + 'px';
+            markerLine.style.display = 'block';
+            markerTag.textContent = markerDate;
+        } else {
+            markerLine.style.display = 'none';
+            markerDate = null;
+        }
     }
 }
 
@@ -194,21 +197,36 @@ function createMainRightRow(main, bgColor) {
         barHtml = `<div class="bar-main" style="left: ${startX}px; width: ${width}px;" data-id="${main.id}" data-category="main"></div>`;
     }
 
-    // 事件
-    let eventsHtml = '';
-    (main.events || []).forEach(evt => {
+    const eventsHtml = (main.events || []).map(evt => {
         const evtX = getXPixelByDate(evt.date);
         const isMeeting = (evt.type === 'meeting');
-        eventsHtml += `
+        // 转义单引号防止内联 JS 报错
+        const safeName = evt.name.replace(/'/g, "\\'");
+        return `
             <div class="node-marker ${isMeeting ? 'node-meeting' : 'node-milestone'}" 
-                 style="left: ${evtX - 12}px;" 
-                 data-id="${evt.id}" data-category="${evt.type}"
-                 onmouseenter="showHoverLine('${evt.date}', '${evt.name}', ${evtX})"
-                 onmouseleave="hideHoverLine()">
+                style="left: ${evtX - 12}px;" 
+                data-id="${evt.id}" data-category="${evt.type}"
+                onmouseenter="showEventTooltip(event, '${safeName}', '${evt.date}')"
+                onmouseleave="hideTooltipCard()">
                 <i class="bi ${isMeeting ? 'bi-telephone-fill' : 'bi-flag-fill'}" style="font-size:0.75rem;"></i>
             </div>
         `;
-    });
+    }).join('');
+    // // 事件
+    // let eventsHtml = '';
+    // (main.events || []).forEach(evt => {
+    //     const evtX = getXPixelByDate(evt.date);
+    //     const isMeeting = (evt.type === 'meeting');
+    //     eventsHtml += `
+    //         <div class="node-marker ${isMeeting ? 'node-meeting' : 'node-milestone'}" 
+    //              style="left: ${evtX - 12}px;" 
+    //              data-id="${evt.id}" data-category="${evt.type}"
+    //              onmouseenter="showHoverLine('${evt.date}', '${evt.name}', ${evtX})"
+    //              onmouseleave="hideHoverLine()">
+    //             <i class="bi ${isMeeting ? 'bi-telephone-fill' : 'bi-flag-fill'}" style="font-size:0.75rem;"></i>
+    //         </div>
+    //     `;
+    // });
 
     row.innerHTML = `${gridHtml}${barHtml}${eventsHtml}`;
     return row;
@@ -222,10 +240,22 @@ function createSubLeftRow(child) {
     row.style.borderBottom = '1px solid #f1f5f9';
     row.dataset.id = child.id;
     row.dataset.category = 'sub';
+
+    // 获取今日日期（优先使用全局数据，否则用当前日期）
+    const today = globalData ? globalData.today : new Date().toISOString().split('T')[0];
+
+    let badgeClass = 'bg-primary'; // 默认进行中（蓝色）
+    if (child.actual_end && child.actual_end.trim() !== '') {
+        badgeClass = 'bg-success'; // 已完成（绿色）
+    } else if (child.start && child.start > today) {
+        badgeClass = 'bg-secondary'; // 未开始（灰色）
+    }
+    // 否则保持蓝色（进行中）
+    
     row.innerHTML = `
         <div style="display:flex; align-items:center; width:100%; gap:4px; padding-left:22px;">
             <div class="col-value col-name" title="${child.name}" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                <span class="badge bg-primary me-1">子任务</span>${child.name}
+                <span class="badge ${badgeClass} me-1">子任务</span>${child.name}
             </div>
             <div class="col-value col-owner text-muted small">${child.owner || ''}</div>
             <div class="col-value col-man-days text-primary fw-bold small">${child.man_days || 0} 天</div>
@@ -251,22 +281,33 @@ function createSubRightRow(child) {
     const totalWidth = Math.max(endX - startX, 16);
     const progress = child.progress || 0;
     const actualEnd = child.actual_end;
+    const today = globalData ? globalData.today : new Date().toISOString().split('T')[0];
+
+    // 判断是否未开始：有开始日期且开始日期 > 今天，且无实际完成日期
+    const isNotStarted = child.start && child.start > today && !actualEnd;
 
     let gridHtml = timeColumns.map(() => `<div class="grid-cell" style="width: ${config.cellWidth}px;"></div>`).join('');
     
     let segmentsHtml = '';
     let totalBarWidth = 0;
-    if (!actualEnd) {
+
+    if (isNotStarted) {
+        // 未开始：进度条灰色，显示0%
+        totalBarWidth = totalWidth;
+        segmentsHtml = `<div class="bar-segment gray" style="width:100%;">0%</div>`;
+    } else if (!actualEnd) {
+        // 进行中（无实际结束日期）
         totalBarWidth = totalWidth;
         segmentsHtml = `<div class="bar-segment blue" style="width:100%;">${progress}%</div>`;
     } else {
+        // 已完成（有实际结束日期）
         const actualX = getXPixelByDate(actualEnd);
         if (actualX > endX) {
             const planWidth = Math.max(endX - startX, 4);
             const overrunWidth = Math.max(actualX - endX, 4);
             totalBarWidth = planWidth + overrunWidth;
             segmentsHtml = `
-                <div class="bar-segment blue" style="width:${planWidth}px;">${progress}%</div>
+                <div class="bar-segment green" style="width:${planWidth}px;">${progress}%</div>
                 <div class="bar-segment red" style="width:${overrunWidth}px;"></div>
             `;
         } else if (actualX < endX) {
@@ -274,12 +315,12 @@ function createSubRightRow(child) {
             const dashWidth = Math.max(endX - actualX, 4);
             totalBarWidth = greenWidth + dashWidth;
             segmentsHtml = `
-                <div class="bar-segment green" style="width:${greenWidth}px;"></div>
+                <div class="bar-segment green" style="width:${greenWidth}px;display:flex; align-items:center; justify-content:center; font-size:0.6rem; font-weight:bold; color:#fff;">100%</div>
                 <div class="bar-segment dashed" style="width:${dashWidth}px;"></div>
             `;
         } else {
             totalBarWidth = totalWidth;
-            segmentsHtml = `<div class="bar-segment green" style="width:100%;"></div>`;
+            segmentsHtml = `<div class="bar-segment green" style="width:100%; display:flex; align-items:center; justify-content:center; font-size:0.6rem; font-weight:bold; color:#fff;">100%</div>`;
         }
     }
 
@@ -368,9 +409,8 @@ function setupEventDelegation() {
     });
 
     // ==================== 日期标记线功能 ====================
-    let markerLine = document.getElementById('markerLine');
-    let markerTag = document.getElementById('markerTag');
-    let markerDate = null; // 当前标记的日期字符串
+    markerLine = document.getElementById('markerLine');
+    markerTag = document.getElementById('markerTag');
 
     // 点击右侧面板（空白区域）添加标记线
     document.getElementById('rightPanel').addEventListener('click', function(e) {
@@ -382,9 +422,8 @@ function setupEventDelegation() {
             return;
         }
         
-        // 计算点击位置对应的日期
         const rect = this.getBoundingClientRect();
-        const x = e.clientX - rect.left + this.scrollLeft; // 考虑滚动偏移
+        const x = e.clientX - rect.left; 
         const date = getDateFromPixelX(x);
         if (!date) return;
         
@@ -396,6 +435,7 @@ function setupEventDelegation() {
         
         // 让标记线可交互（双击移除）
         markerLine.classList.add('draggable');
+        markerLine.title = '标记日期: ' + date;   // 新增
     });
 
     // 双击标记线移除
@@ -404,6 +444,7 @@ function setupEventDelegation() {
         this.style.display = 'none';
         markerDate = null;
         this.classList.remove('draggable');
+        this.title = '';   // 新增
     });
 
     // 辅助函数：根据像素位置计算日期
@@ -415,7 +456,7 @@ function setupEventDelegation() {
         const start = new Date(globalData.timeline_start);
         const end = new Date(globalData.timeline_end);
         const totalDays = (end - start) / (1000 * 60 * 60 * 24) + 1;
-        const offsetDays = Math.round(ratio * (totalDays - 1));
+        const offsetDays = Math.round(ratio * totalDays);
         const targetDate = new Date(start);
         targetDate.setDate(targetDate.getDate() + offsetDays);
         return targetDate.toISOString().split('T')[0];
@@ -497,6 +538,27 @@ function toggleProject(mainId) {
     renderGantt();
 }
 
+
+// 事件悬停卡片：仅显示名称和日期
+function showEventTooltip(event, name, date) {
+    const card = document.getElementById('barTooltipCard');
+    // 更新现有元素
+    document.getElementById('tipTitle').textContent = name;
+    document.getElementById('tipStart').textContent = date;
+    document.getElementById('tipEnd').textContent = '';        // 清空预计结束
+    document.getElementById('tipActualRow').style.display = 'none';  // 隐藏实际结束行
+
+    // 定位（与 showTooltipCard 保持一致）
+    let x = event.clientX + 15;
+    let y = event.clientY - 10;
+    const cardWidth = 200;
+    const cardHeight = 80;   // 高度可适当减小
+    if (x + cardWidth > window.innerWidth) x = event.clientX - cardWidth - 10;
+    if (y + cardHeight > window.innerHeight) y = window.innerHeight - cardHeight - 10;
+    card.style.left = x + 'px';
+    card.style.top = y + 'px';
+    card.style.display = 'block';
+}
 // ==================== 卡片 tooltip ====================
 function showTooltipCard(event, name, start, end, actual) {
     const card = document.getElementById('barTooltipCard');
@@ -536,28 +598,36 @@ function hideHoverLine() {
 }
 
 // ==================== 拖拽滚动 ====================
+// 滚动容器为整个甘特图面板 #ganttBoard（单一滚动区域，页面本身不滚动）
+// 支持横向 + 纵向双向拖拽
 function initDragToScroll() {
-    const slider = document.getElementById('rightPanel');
-    let isDown = false, startX, scrollLeft;
-    const onMouseDown = (e) => {
+    const board = document.getElementById('ganttBoard');
+    let isDown = false, startX, startY, startScrollLeft, startScrollTop;
+
+    board.addEventListener('mousedown', (e) => {
+        // 左侧任务列表区域不启动拖拽（保留行点击编辑）
+        if (e.target.closest('#leftPanel')) return;
+        // 任务条 / 节点标记上不启动拖拽（保留点击编辑）
         if (e.target.closest('.node-marker') || e.target.closest('.bar-container') || e.target.closest('.bar-main')) return;
         isDown = true;
-        startX = e.pageX - slider.offsetLeft;
-        scrollLeft = slider.scrollLeft;
-    };
-    const onMouseLeave = () => { isDown = false; };
-    const onMouseUp = () => { isDown = false; };
-    const onMouseMove = (e) => {
+        const rect = board.getBoundingClientRect();
+        startX = e.clientX - rect.left;
+        startY = e.clientY - rect.top;
+        startScrollLeft = board.scrollLeft;
+        startScrollTop = board.scrollTop;
+    });
+
+    // mousemove / mouseup 挂在 window 上，指针拖出面板后依然有效
+    window.addEventListener('mousemove', (e) => {
         if (!isDown) return;
         e.preventDefault();
-        const x = e.pageX - slider.offsetLeft;
-        const walk = (x - startX) * 1.5;
-        slider.scrollLeft = scrollLeft - walk;
-    };
-    slider.addEventListener('mousedown', onMouseDown);
-    slider.addEventListener('mouseleave', onMouseLeave);
-    slider.addEventListener('mouseup', onMouseUp);
-    slider.addEventListener('mousemove', onMouseMove);
+        const rect = board.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        board.scrollLeft = startScrollLeft - (x - startX) * 1.5;
+        board.scrollTop  = startScrollTop  - (y - startY) * 1.5;
+    });
+    window.addEventListener('mouseup', () => { isDown = false; });
 }
 
 // ==================== EasyMDE 管理 ====================
@@ -588,8 +658,6 @@ function initEasyMDE(text) {
         easyMDEInstance.codemirror.refresh();
 
         // 强制进入预览模式（保证一定是预览）
-        // 注意：togglePreview 是切换，如果已经是预览会切回编辑，所以先判断状态
-        // 但 EasyMDE 没有直接暴露状态，我们可以通过检查 class 来判断
         const container = document.querySelector('.EasyMDEContainer');
         if (container && !container.classList.contains('editor-preview-active')) {
             easyMDEInstance.togglePreview();
@@ -598,7 +666,7 @@ function initEasyMDE(text) {
         // 设置容器高度，避免被挤压
         const wrapper = document.querySelector('.editor-wrapper .EasyMDEContainer');
         if (wrapper) wrapper.style.height = '100%';
-    }, 150); // 适当加长延迟，确保模态框动画完成
+    }, 150);
 }
 
 // ==================== 编辑模态框 ====================
@@ -628,11 +696,9 @@ function openEditModal(node, category) {
     }
 
     editModalInstance.show();
-    // 在模态框完全显示后初始化编辑器
     const modalElement = document.getElementById('editModal');
     modalElement.addEventListener('shown.bs.modal', function onShown() {
-        modalElement.removeEventListener('shown.bs.modal', onShown); // 避免重复绑定
-        // 额外延迟 50ms，确保尺寸稳定
+        modalElement.removeEventListener('shown.bs.modal', onShown);
         setTimeout(() => {
             initEasyMDE(node.description || '');
         }, 50);
@@ -880,7 +946,6 @@ function loadGanttData() {
             globalData = data;
             renderGantt();
             populateDropdown(data.projects);
-            initDragToScroll();
         })
         .catch(err => {
             alert('加载数据失败：' + err.message);
@@ -892,13 +957,38 @@ function populateDropdown(projects) {
     select.innerHTML = projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 }
 
+// ==================== 面板高度自适应 ====================
+// 让甘特图成为页面上唯一的纵向滚动区域（避免"页面 + 面板"双滚动条）
+function fitBoardHeight() {
+    const board = document.getElementById('ganttBoard');
+    const top = board.getBoundingClientRect().top;
+    const available = window.innerHeight - top - 16; // 16px 底部留白
+    board.style.maxHeight = Math.max(available, 300) + 'px';
+}
+
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', function() {
     loadGanttData();
     setupEventDelegation();
+    initDragToScroll();   // 只绑定一次，避免重复监听
+    fitBoardHeight();     // 设置唯一滚动区域的高度
+    window.addEventListener('resize', fitBoardHeight);
     toggleFormType('sub');
+    // 顶部图例折叠切换
+    const toggleBtn = document.getElementById('toggleTopBar');
+    const container = document.querySelector('.container-fluid');
 
-    // 获取标记线元素
-    markerLine = document.getElementById('markerLine');
-    markerTag = document.getElementById('markerTag');
+    toggleBtn.addEventListener('click', function() {
+        container.classList.toggle('top-bar-hidden');
+        const icon = this.querySelector('i');
+        if (container.classList.contains('top-bar-hidden')) {
+            icon.className = 'bi bi-chevron-down';
+            this.title = '显示图例';
+        } else {
+            icon.className = 'bi bi-chevron-up';
+            this.title = '隐藏图例';
+        }
+        // 重新计算甘特图高度，适应新布局
+        fitBoardHeight();
+    });
 });
