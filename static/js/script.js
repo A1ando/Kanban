@@ -212,21 +212,6 @@ function createMainRightRow(main, bgColor) {
             </div>
         `;
     }).join('');
-    // // 事件
-    // let eventsHtml = '';
-    // (main.events || []).forEach(evt => {
-    //     const evtX = getXPixelByDate(evt.date);
-    //     const isMeeting = (evt.type === 'meeting');
-    //     eventsHtml += `
-    //         <div class="node-marker ${isMeeting ? 'node-meeting' : 'node-milestone'}" 
-    //              style="left: ${evtX - 12}px;" 
-    //              data-id="${evt.id}" data-category="${evt.type}"
-    //              onmouseenter="showHoverLine('${evt.date}', '${evt.name}', ${evtX})"
-    //              onmouseleave="hideHoverLine()">
-    //             <i class="bi ${isMeeting ? 'bi-telephone-fill' : 'bi-flag-fill'}" style="font-size:0.75rem;"></i>
-    //         </div>
-    //     `;
-    // });
 
     row.innerHTML = `${gridHtml}${barHtml}${eventsHtml}`;
     return row;
@@ -545,7 +530,7 @@ function showEventTooltip(event, name, date) {
     // 更新现有元素
     document.getElementById('tipTitle').textContent = name;
     document.getElementById('tipStart').textContent = date;
-    document.getElementById('tipEnd').textContent = '';        // 清空预计结束
+    document.getElementById('tipEndRow').style.display = 'none';   // 隐藏“预计结束”
     document.getElementById('tipActualRow').style.display = 'none';  // 隐藏实际结束行
 
     // 定位（与 showTooltipCard 保持一致）
@@ -565,6 +550,7 @@ function showTooltipCard(event, name, start, end, actual) {
     document.getElementById('tipTitle').textContent = name;
     document.getElementById('tipStart').textContent = start || '-';
     document.getElementById('tipEnd').textContent = end || '-';
+    document.getElementById('tipEndRow').style.display = 'flex';
     const actualRow = document.getElementById('tipActualRow');
     if (actual) {
         actualRow.style.display = 'flex';
